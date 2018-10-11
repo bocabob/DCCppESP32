@@ -87,6 +87,38 @@ void loadBytePacket(SignalGenerator &signalGenerator, uint8_t *data, uint8_t len
   signalGenerator.loadPacket(packet, repeatCount);
 }
 
+Packet *SignalGenerator::getNextPacketToSend() {
+  if(_currentPacket != nullptr) {
+    if(_currentPacket->numberOfRepeats > 0) {
+      log_v("[%s] current packet requires repeats (%d remain)", _name.c_str(), _currentPacket->numberOfRepeats);
+      _currentPacket->numberOfRepeats--;
+    } else {
+      log_v("[%s] current packet complete", _name.c_str());
+      // if the current packet is not the idle pack get rid of it
+      if(_currentPacket != &_idlePacket) {
+        _availablePackets.push(_currentPacket);
+      }
+      _currentPacket = nullptr;
+    }
+  }
+  // if we don't have a packet, check if we have any to send otherwise
+  // queue up an idle packet
+  if (_currentPacket == nullptr) {
+    log_v("[%s] finding new packet to send", _name.c_str());
+    //portENTER_CRITICAL(&_sendQueueMUX);
+    if(!isQueueEmpty()) {
+      log_v("[%s] Found new packet", _name.c_str());
+      _currentPacket = _toSend.front();
+      _toSend.pop();
+    } else {
+      log_v("[%s] no new packets, queuing idle packet", _name.c_str());
+      _currentPacket = &_idlePacket;
+    }
+    //portEXIT_CRITICAL(&_sendQueueMUX);
+  }
+  return _currentPacket;
+}
+/*
 bool IRAM_ATTR SignalGenerator::getNextBitToSend() {
   const uint8_t bitMask[] = {0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01};
   bool result = false;
@@ -125,6 +157,7 @@ bool IRAM_ATTR SignalGenerator::getNextBitToSend() {
   }
   return result;
 }
+*/
 
 void SignalGenerator::loadPacket(std::vector<uint8_t> data, int numberOfRepeats, bool drainToSendQueue) {
 #if DEBUG_SIGNAL_GENERATOR
@@ -199,7 +232,7 @@ void SignalGenerator::loadPacket(std::vector<uint8_t> data, int numberOfRepeats,
   _toSend.push(packet);
   portEXIT_CRITICAL(&_sendQueueMUX);
 }
-
+/*
 template<int signalGenerator>
 void IRAM_ATTR signalGeneratorPulseTimer(void)
 {
@@ -222,6 +255,48 @@ void IRAM_ATTR signalGeneratorDirectionTimer()
   auto& generator = dccSignal[signalGenerator];
   digitalWrite(generator._directionPin, LOW);
 }
+*/
+
+constexpr rmt_item32_t zero_bit = {DCC_ZERO_BIT_PULSE_DURATION, 1, DCC_ZERO_BIT_PULSE_DURATION, 0};
+constexpr rmt_item32_t one_bit = {DCC_ONE_BIT_PULSE_DURATION, 1, DCC_ONE_BIT_PULSE_DURATION, 0};
+
+void RMTFeederTask(void* arg) {
+  SignalGenerator *generator = reinterpret_cast<SignalGenerator *>(arg);
+  const uint8_t bitMask[] = {0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01};
+  auto bitCount = 128;
+  log_d("[%s] RMT Feeder starting", generator->_name.c_str());
+
+  rmt_item32_t data[128];
+  std::fill(std::begin(data), std::end(data), zero_bit);
+  while(1) {
+    uint32_t startTime = micros();
+    rmt_write_items(generator->_rmtConfig.channel, data, bitCount, false);
+    log_v("[%s] %d us to send", generator->_name.c_str(), micros() - startTime);
+    auto packet = generator->getNextPacketToSend();
+    //auto packet = &generator->_idlePacket;
+    //packet->currentBit = 0;
+    bitCount = packet->numberOfBits;
+    uint32_t duration = 0;
+    log_v("[%s] packet has %d bits", generator->_name.c_str(), bitCount);
+    for(int bit = 0; bit < packet->numberOfBits; ++bit) {
+      if(packet->buffer[bit / 8] & bitMask[bit % 8]) {
+        data[bit] = zero_bit;
+        duration += DCC_ONE_BIT_TOTAL_DURATION;
+      } else {
+        data[bit] = one_bit;
+        duration += DCC_ZERO_BIT_TOTAL_DURATION;
+      }
+    }
+    data[bitCount] = one_bit;
+    duration += DCC_ONE_BIT_TOTAL_DURATION;
+    bitCount++;
+    log_v("[%s] queueing %d bits (%d us) for sending", generator->_name.c_str(), bitCount, duration);
+    startTime = micros();
+    rmt_wait_tx_done(generator->_rmtConfig.channel, portMAX_DELAY);
+    log_v("[%s] %d us to send (wait)", generator->_name.c_str(), micros() - startTime);
+    sleep(2);
+  }
+}
 
 template<int signalGenerator>
 void SignalGenerator::configureSignal(String name, uint8_t directionPin, uint16_t maxPackets) {
@@ -235,15 +310,6 @@ void SignalGenerator::configureSignal(String name, uint8_t directionPin, uint16_
     _availablePackets.push(new Packet());
   }
 
-  // force the directionPin to low since it will be controlled by the DCC timer
-  pinMode(_directionPin, INPUT);
-  digitalWrite(_directionPin, LOW);
-  pinMode(_directionPin, OUTPUT);
-  startSignal<signalGenerator>();
-}
-
-template<int signalGenerator>
-void SignalGenerator::startSignal() {
   // inject the required reset and idle packets into the queue
   // this is required as part of S-9.2.4 section A
   // at least 20 reset packets and 10 idle packets must be sent upon initialization
@@ -253,6 +319,31 @@ void SignalGenerator::startSignal() {
   log_i("[%s] Adding idle packet to packet queue", _name.c_str());
   loadBytePacket(dccSignal[signalGenerator], idlePacket, 2, 10);
 
+  // force the directionPin to low since it will be controlled by the DCC timer
+  //pinMode(_directionPin, INPUT);
+  //digitalWrite(_directionPin, LOW);
+  //pinMode(_directionPin, OUTPUT);
+
+  _rmtConfig.rmt_mode = RMT_MODE_TX;
+  _rmtConfig.channel = signalGenerator == DCC_SIGNAL_OPERATIONS ? RMT_CHANNEL_0 : RMT_CHANNEL_4;
+  _rmtConfig.clk_div = DCC_TIMER_PRESCALE;
+  _rmtConfig.gpio_num = (gpio_num_t)_directionPin;
+  _rmtConfig.mem_block_num = 2;
+  _rmtConfig.tx_config = {false, 0, 0, RMT_CARRIER_LEVEL_HIGH, false, RMT_IDLE_LEVEL_LOW, false};
+  rmt_config(&_rmtConfig);
+  auto status = rmt_driver_install(_rmtConfig.channel, 0, 0);
+  if(status != ESP_OK) {
+    log_e("[%s] failed to install RMT driver: %d", _name.c_str(), status);
+  }
+  xTaskCreate(RMTFeederTask, _name.c_str(), 5*1024, &dccSignal[signalGenerator], tskIDLE_PRIORITY, &_taskHandle);
+//  startSignal<signalGenerator>();
+}
+
+template<int signalGenerator>
+void SignalGenerator::startSignal() {
+  log_i("[%s] Resuming RMT Feeder task", _name.c_str());
+  vTaskResume(&_taskHandle);
+/*
   log_i("[%s] Configuring Timer(%d) for generating DCC Signal (Full Wave)", _name.c_str(), 2 * signalGenerator);
   _fullCycleTimer = timerBegin(2 * signalGenerator, DCC_TIMER_PRESCALE, true);
   log_i("[%s] Attaching interrupt handler to Timer(%d)", _name.c_str(), 2 * signalGenerator);
@@ -275,15 +366,17 @@ void SignalGenerator::startSignal() {
   timerAlarmEnable(_fullCycleTimer);
   log_i("[%s] Enabling alarm on Timer(%d)", _name.c_str(), 2 * signalGenerator + 1);
   timerAlarmEnable(_pulseTimer);
-  
+*/
   _enabled = true;
 }
 
 template<int signalGenerator>
 void SignalGenerator::stopSignal() {
   // prevent ISR from getting another packet while we are shutting down
-  portENTER_CRITICAL(&_sendQueueMUX);
-
+  //portENTER_CRITICAL(&_sendQueueMUX);
+  log_i("[%s] Suspending RMT Feeder task", _name.c_str());
+  vTaskSuspend(&_taskHandle);
+/*
   log_i("[%s] Shutting down Timer(%d) (Full Wave)", _name.c_str(), 2 * signalGenerator);
   timerStop(_fullCycleTimer);
   timerAlarmDisable(_fullCycleTimer);
@@ -295,9 +388,10 @@ void SignalGenerator::stopSignal() {
   timerAlarmDisable(_pulseTimer);
   timerDetachInterrupt(_pulseTimer);
   timerEnd(_pulseTimer);
-
+*/
   // give enough time for any timer ISR calls to complete before proceeding
   delay(250);
+  log_i("[%s] Draining packet queue (%d elements)", _name.c_str(), _toSend.size());
 
   // if we have a current packet being processed move it to the available
   // queue if it is not the pre-canned idle packet.
@@ -319,12 +413,12 @@ void SignalGenerator::stopSignal() {
   }
 
   _enabled = false;
-  portEXIT_CRITICAL(&_sendQueueMUX);
+  //portEXIT_CRITICAL(&_sendQueueMUX);
 }
 
 void SignalGenerator::waitForQueueEmpty() {
   while(!isQueueEmpty()) {
-    log_d("[%s] Waiting for %d packets to send...", _name.c_str(), _toSend.size());
+    log_v("[%s] Waiting for %d packets to send...", _name.c_str(), _toSend.size());
     delay(10);
   }
 }
@@ -343,36 +437,36 @@ int16_t readCV(const uint16_t cv) {
   uint8_t readCVBitPacket[4] = { (uint8_t)(0x78 + (highByte(cv - 1) & 0x03)), lowByte(cv - 1), 0x00, 0x00};
   uint8_t verifyCVBitPacket[4] = { (uint8_t)(0x74 + (highByte(cv - 1) & 0x03)), lowByte(cv - 1), 0x00, 0x00};
   int16_t cvValue = 0;
-  log_d("[PROG] Attempting to read CV %d, samples: %d, ack value: %d", cv, CVSampleCount, milliAmpAck);
+  log_d("[%d] [PROG] Attempting to read CV %d, samples: %d, ack value: %d", micros(), cv, CVSampleCount, milliAmpAck);
   auto& signalGenerator = dccSignal[DCC_SIGNAL_PROGRAMMING];
 
   for(uint8_t bit = 0; bit < 8; bit++) {
-    log_d("[PROG] CV %d, bit [%d/7]", cv, bit);
+    log_d("[%d] [PROG] CV %d, bit [%d/7]", micros(), cv, bit);
     readCVBitPacket[2] = 0xE8 + bit;
     loadBytePacket(signalGenerator, resetPacket, 2, 3);
     loadBytePacket(signalGenerator, readCVBitPacket, 3, 5);
     signalGenerator.waitForQueueEmpty();
     if(motorBoard->captureSample(CVSampleCount) > milliAmpAck) {
-      log_d("[PROG] CV %d, bit [%d/7] ON", cv, bit);
+      log_d("[%d] [PROG] CV %d, bit [%d/7] ON", micros(), cv, bit);
       bitWrite(cvValue, bit, 1);
     } else {
-      log_d("[PROG] CV %d, bit [%d/7] OFF", cv, bit);
+      log_d("[%d] [PROG] CV %d, bit [%d/7] OFF", micros(), cv, bit);
     }
   }
 
   // verify the byte we received
   verifyCVBitPacket[2] = cvValue & 0xFF;
-  log_d("[PROG] CV %d, read value %d, verifying", cv, cvValue);
+  log_d("[%d] [PROG] CV %d, read value %d, verifying", micros(), cv, cvValue);
   loadBytePacket(signalGenerator, resetPacket, 2, 3);
   loadBytePacket(signalGenerator, verifyCVBitPacket, 3, 5);
   signalGenerator.waitForQueueEmpty();
   bool verified = false;
   if(motorBoard->captureSample(CVSampleCount) > milliAmpAck) {
     verified = true;
-    log_d("[PROG] CV %d, verified", cv);
+    log_d("[%d] [PROG] CV %d, verified", micros(), cv);
   }
   if(!verified) {
-    log_w("[PROG] CV %d, could not be verified", cv);
+    log_w("[%d] [PROG] CV %d, could not be verified", micros(), cv);
     cvValue = -1;
   }
   return cvValue;

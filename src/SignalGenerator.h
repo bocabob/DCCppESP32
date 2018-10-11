@@ -22,6 +22,7 @@ COPYRIGHT (c) 2017,2018 Mike Dunston
 #include <queue>
 #include <stack>
 #include <driver/adc.h>
+#include <driver/rmt.h>
 
 #define MAX_BYTES_IN_PACKET 10
 
@@ -40,14 +41,17 @@ struct SignalGenerator {
   template<int signalGenerator>
   void stopSignal();
 
-  bool IRAM_ATTR getNextBitToSend();
+  //bool IRAM_ATTR getNextBitToSend();
+  Packet *getNextPacketToSend();
   void loadPacket(std::vector<uint8_t>, int, bool=false);
   void waitForQueueEmpty();
   bool isQueueEmpty();
   bool isEnabled();
 
-  hw_timer_t *_fullCycleTimer;
-  hw_timer_t *_pulseTimer;
+  rmt_config_t _rmtConfig;
+  TaskHandle_t _taskHandle;
+  //hw_timer_t *_fullCycleTimer;
+  //hw_timer_t *_pulseTimer;
   String _name;
   uint8_t _directionPin;
   int _currentMonitorPin;
