@@ -1,7 +1,7 @@
 /**********************************************************************
 DCC COMMAND STATION FOR ESP32
 
-COPYRIGHT (c) 2019 Mike Dunston
+COPYRIGHT (c) 2017-2019 Mike Dunston
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -14,15 +14,20 @@ COPYRIGHT (c) 2019 Mike Dunston
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see http://www.gnu.org/licenses
 **********************************************************************/
-
 #pragma once
 
-class LCCInterface {
-public:
-	LCCInterface();
-  void init();
-	void startWiFiDependencies();
-  void update();
-};
+#include "DCCSignalGenerator.h"
+#include <esp32-hal-timer.h>
 
-extern LCCInterface lccInterface;
+class SignalGenerator_HardwareTimer : public SignalGenerator {
+public:
+  SignalGenerator_HardwareTimer(String, uint16_t, uint8_t, uint8_t);
+  // these need to be public for the ISR handler to access them
+  hw_timer_t *_timer;
+  bool _topOfWave{true};
+protected:
+  void enable() override;
+  void disable() override;
+  void lockSendQueueISR() override;
+  void unlockSendQueueISR() override;
+};

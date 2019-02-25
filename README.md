@@ -40,6 +40,9 @@ The DCC++ESP32 Command Station consists of multiple modules, some of which are r
 | S88 | This is an optional module that allows the Command Station to poll one (or more) S88 busses as sensor inputs. |
 | LCC | This is an optional module that allows the Command Station to interface with other LCC devices either through a physical CAN bus or through WiFi connections to a LCC HUB device. |
 
+## Building with Arduino IDE
+It is not recommended to build with the Arduino IDE due to the custom partition table and build scripts which are not supported within the Arduino IDE.
+
 ## Configuring the required modules
 With only two modules being required out-of-box the configuration is relatively painless.
 
@@ -279,8 +282,8 @@ When this module is enabled the Command Station will receive and respond to cert
 #### LCC Configuration
 | PARAM | Description |
 | ----- | ----------- |
-| LCC_NODE_ID | This is the unique 64bit node ID for the DCC++ESP32 Command Station. You are encouraged to have your own unique ID but it is not mandatory. You can get a unique ID range [here](https://registry.openlcb.org/requestuniqueidrange) and assign one ID from the range here. The default value is 05.01.01.01.3F.01 (without dots) which indicates it is the second ID in the 05.01.01.01.3F.{00-FF} range. |
+| LCC_NODE_ID | This is the unique 64bit node ID for the DCC++ESP32 Command Station. You are encouraged to have your own unique ID but it is not mandatory. You can get a unique ID range [here](https://registry.openlcb.org/requestuniqueidrange) and assign one ID from the range here. The default value is 05.01.01.01.3F.00 (without dots) which indicates it is the first ID in the 05.01.01.01.3F.{00-FF} range. |
 | LCC_CAN_RX_PIN | This is the pin connected to the CAN transceiver RX pin. This is optional, if left as -1 the CAN connection will not be configured. |
 | LCC_CAN_TX_PIN | This is the pin connected to the CAN transceiver TX pin. This is optional, if left as -1 the CAN connection will not be configured. |
 
--February 15, 2019
+-February 17, 2019

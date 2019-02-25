@@ -14,15 +14,18 @@ COPYRIGHT (c) 2019 Mike Dunston
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see http://www.gnu.org/licenses
 **********************************************************************/
-
 #pragma once
 
-class LCCInterface {
-public:
-	LCCInterface();
-  void init();
-	void startWiFiDependencies();
-  void update();
-};
+#include "DCCSignalGenerator.h"
+#include <driver/rmt.h>
 
-extern LCCInterface lccInterface;
+class SignalGenerator_RMT : public SignalGenerator {
+public:
+  SignalGenerator_RMT(String, uint16_t, uint8_t, uint8_t);
+  bool _stopRequested{false};
+  bool _stopCompleted{false};
+  const rmt_channel_t _rmtChannel;
+protected:
+  void enable() override;
+  void disable() override;
+};

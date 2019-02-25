@@ -117,9 +117,9 @@ class DccPacketQueueInjector : public dcc::PacketFlowInterface {
         void send(Buffer<dcc::Packet> *b, unsigned prio)
         {
             dcc::Packet *pkt = b->data();
-            dccSignal[DCC_SIGNAL_OPERATIONS].loadBytePacket(pkt->payload, pkt->dlc, pkt->packet_header.rept_count);
+            dccSignal[DCC_SIGNAL_OPERATIONS]->loadBytePacket(pkt->payload, pkt->dlc, pkt->packet_header.rept_count);
             // check if the packet looks like an accessories decoder packet
-            if(pkt->packet_header.is_marklin == 0 && pkt->dlc == 2 && pkt->payload[0] & 0x80 && pkt->payload[1] & 0x80) {
+            if(!pkt->packet_header.is_marklin && pkt->dlc == 2 && pkt->payload[0] & 0x80 && pkt->payload[1] & 0x80) {
                 // the second byte of the payload contains part of the address and is stored in ones complement format
                 uint8_t onesComplementByteTwo = (pkt->payload[1] ^ 0xF8);
                 // decode the accessories decoder address and update the TurnoutManager metadata
@@ -164,7 +164,12 @@ LCCInterface lccInterface;
 LCCInterface::LCCInterface() {
 }
 
-void lccTask(void *param) {
+void LCCInterface::init() {
+    SPIFFS.mkdir("/LCC");
+    // uncomment the next two lines to force a factory reset on startup
+    //SPIFFS.remove("/LCC/config");
+    //SPIFFS.remove("/LCC/cdi.xml");
+
     // Create the CDI.xml dynamically
     openmrn.create_config_descriptor_xml(cfg, openlcb::CDI_FILENAME);
 
@@ -174,48 +179,19 @@ void lccTask(void *param) {
 
     // Start the OpenMRN stack
     openmrn.begin();
-
 #if LCC_CAN_ENABLED
     // Add the hardware CAN device as a bridge
     openmrn.add_can_port(
         new Esp32HardwareCan("esp32can", (gpio_num_t)LCC_CAN_RX_PIN, (gpio_num_t)LCC_CAN_TX_PIN, false));
 #endif
-    while(true) {
-#if LCC_ENABLE_GC_TCP_HUB
-        // if the TCP/IP listener has a new client accept it and add it
-        // as a new GridConnect port.
-        if (openMRNServer.hasClient())
-        {
-            WiFiClient client = openMRNServer.available();
-            if (client)
-            {
-                openmrn.add_gridconnect_port(new Esp32WiFiClientAdapter(client));
-            }
-        }
-#endif
-        // Call into the OpenMRN stack for its periodic updates
-        openmrn.loop();
-
-        // allow task scheduler to run another task if any are pending
-        vTaskDelay(1);
-    }
-}
-
-void LCCInterface::init() {
-    SPIFFS.mkdir("/LCC");
-    // uncomment the next two lines to force a factory reset on startup
-    //SPIFFS.remove("/LCC/config");
-    //SPIFFS.remove("/LCC/cdi.xml");
-
-    // this creates a background task with the same priority as the primary
-    // arduino loop() task.
-    xTaskCreate(lccTask, "LCC", 4096, nullptr, 1, nullptr);
 }
 
 void LCCInterface::startWiFiDependencies() {
 #if LCC_ENABLE_GC_TCP_HUB
     // Advertise the Command Station as a GC TCP hub
-    MDNS.addService(openlcb::TcpDefs::MDNS_SERVICE_NAME_GRIDCONNECT_CAN, openlcb::TcpDefs::MDNS_PROTOCOL_TCP, OPENMRN_TCP_PORT);
+    MDNS.addService(openlcb::TcpDefs::MDNS_SERVICE_NAME_GRIDCONNECT_CAN,
+        openlcb::TcpDefs::MDNS_PROTOCOL_TCP,
+        openlcb::TcpClientDefaultParams::DEFAULT_PORT);
     // start the TCP/IP listener
     openMRNServer.setNoDelay(true);
     openMRNServer.begin();
@@ -223,6 +199,23 @@ void LCCInterface::startWiFiDependencies() {
     // CAN is diabled, search for a hub to connect to
     // TODO: implement this after implementing generic support inside OpenMRN
 #endif
+}
+
+void LCCInterface::update() {
+#if LCC_ENABLE_GC_TCP_HUB
+    // if the TCP/IP listener has a new client accept it and add it
+    // as a new GridConnect port.
+    if (openMRNServer.hasClient())
+    {
+        WiFiClient client = openMRNServer.available();
+        if (client)
+        {
+            openmrn.add_gridconnect_port(new Esp32WiFiClientAdapter(client));
+        }
+    }
+#endif
+    // Call into the OpenMRN stack for its periodic updates
+    openmrn.loop();
 }
 
 #endif
