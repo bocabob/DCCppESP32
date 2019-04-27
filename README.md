@@ -51,8 +51,8 @@ Open include/Config_WiFi.h and set the values for the following parameters as re
 
 | PARAM | Description |
 | ----- | ----------- |
-| WIFI_SSID | This is the WiFi Access Point the Command Station should connect to on startup. |
-| WIFI_PASSWORD | This is the password the Command Station should use when connecting to the WiFi Access Point defined above. |
+| SSID_NAME | This is the WiFi Access Point the Command Station should connect to on startup. |
+| SSID_PASSWORD | This is the password the Command Station should use when connecting to the WiFi Access Point defined above. |
 | HOSTNAME | This is the hostname that the Command Station will advertise in mDNS and can be customized if you desire a different name than the default (DCCpp32) |
 
 #### Static IP vs DHCP assigned IP (Optional)
@@ -233,6 +233,8 @@ The following are not implemented but are planned:
 | LOCONET_RX_PIN | This should be connected to the RX input from the LocoNet interface. |
 | LOCONET_TX_PIN | This should be connected to the TX output from the LocoNet interface. |
 | LOCONET_UART | This is the hardware UART on the ESP32 to use for the LocoNet interface. |
+| LOCONET_INVERTED_LOGIC | If the LocoNet interface circuit requires inverted logic this option should be enabled. This is defaulted to enabled based on the LM311 circuit below. |
+| LOCONET_ENABLE_RX_PIN_PULLUP | If the LocoNet interface circuit is an open collector output design it is necessary to enable the built in pull up resistor on the RX pin unless an external pull up resistor has been added between 3v3 (VCC) and LOCONET_RX_PIN. |
 
 #### LocoNet Interface circuit
 John Plocher created the circuit shown below, it works great for a DIY interface as it only requires a handful of components.
@@ -286,4 +288,4 @@ When this module is enabled the Command Station will receive and respond to cert
 | LCC_CAN_RX_PIN | This is the pin connected to the CAN transceiver RX pin. This is optional, if left as -1 the CAN connection will not be configured. |
 | LCC_CAN_TX_PIN | This is the pin connected to the CAN transceiver TX pin. This is optional, if left as -1 the CAN connection will not be configured. |
 
--February 17, 2019
+-April 13, 2019

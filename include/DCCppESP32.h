@@ -19,43 +19,34 @@ COPYRIGHT (c) 2017-2019 Mike Dunston
 // RELEASE VERSION
 /////////////////////////////////////////////////////////////////////////////////////
 
-#define VERSION "1.3.0"
-
-/////////////////////////////////////////////////////////////////////////////////////
-// PERFORMANCE CONFIGURATION
-/////////////////////////////////////////////////////////////////////////////////////
-
-// Maximum clients connected to
-#define MAX_DCCPP_CLIENTS 10
-
-/////////////////////////////////////////////////////////////////////////////////////
-// S88 Timing values (in microseconds)
-/////////////////////////////////////////////////////////////////////////////////////
-#define S88_SENSOR_LOAD_PRE_CLOCK_TIME 50
-#define S88_SENSOR_LOAD_POST_RESET_TIME 50
-#define S88_SENSOR_CLOCK_PULSE_TIME 50
-#define S88_SENSOR_CLOCK_PRE_RESET_TIME 50
-#define S88_SENSOR_RESET_PULSE_TIME 50
-#define S88_SENSOR_READ_TIME 25
-#define S88_MAX_SENSORS_PER_BUS 512
+#define VERSION "1.2.5"
 
 #include <Arduino.h>
 #include <algorithm>
 #include <functional>
 #include <StringArray.h>
 #include <ArduinoJson.h>
-#include <esp32-hal-log.h>
 #include <SPI.h>
 #include <FS.h>
 #include <SPIFFS.h>
+
+#include <utils/logging.h>
 
 #include "Config.h"
 
 // initialize default values for various pre-compiler checks to simplify logic in a lot of places
 #if (defined(INFO_SCREEN_LCD) && INFO_SCREEN_LCD) || (defined(INFO_SCREEN_OLED) && INFO_SCREEN_OLED)
 #define INFO_SCREEN_ENABLED true
+#if (defined(INFO_SCREEN_LCD) && INFO_SCREEN_LCD)
+#define INFO_SCREEN_OLED false
+#endif
+#if (defined(INFO_SCREEN_OLED) && INFO_SCREEN_OLED)
+#define INFO_SCREEN_LCD false
+#endif
 #else
 #define INFO_SCREEN_ENABLED false
+#define INFO_SCREEN_LCD false
+#define INFO_SCREEN_OLED false
 #endif
 
 #ifndef NEXTION_ENABLED
@@ -82,6 +73,14 @@ COPYRIGHT (c) 2017-2019 Mike Dunston
 #define ENERGIZE_OPS_TRACK_ON_STARTUP false
 #endif
 
+#ifndef LOCONET_INVERTED_LOGIC
+#define LOCONET_INVERTED_LOGIC false
+#endif
+
+#ifndef LOCONET_ENABLE_RX_PIN_PULLUP
+#define LOCONET_ENABLE_RX_PIN_PULLUP false
+#endif
+
 #define USE_RMT_FOR_DCC true
 
 #include "ConfigurationManager.h"
@@ -98,7 +97,7 @@ COPYRIGHT (c) 2017-2019 Mike Dunston
 #include "Outputs.h"
 #include "NextionInterface.h"
 #if LCC_ENABLED
-#include <OpenMRN.h>
+#include <OpenMRNLite.h>
 #include "LCCInterface.h"
 #endif
 
@@ -119,7 +118,7 @@ extern bool otaInProgress;
 
 // Perform some basic configuration validations to prevent common mistakes
 
-#if !defined(WIFI_SSID) || !defined(WIFI_PASSWORD)
+#if !defined(SSID_NAME) || !defined(SSID_PASSWORD)
 #error "Invalid Configuration detected, Config_WiFi.h is a mandatory module."
 #endif
 

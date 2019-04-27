@@ -23,11 +23,10 @@ class WiFiInterface {
 public:
 	WiFiInterface();
 	void begin();
-	void update();
 	void showConfiguration();
 	void showInitInfo();
 	void send(const String &);
-	void printf(const __FlashStringHelper *fmt, ...);
+	void print(const __FlashStringHelper *fmt, ...);
 };
 
 extern WiFiInterface wifiInterface;

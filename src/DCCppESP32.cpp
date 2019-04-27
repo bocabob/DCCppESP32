@@ -162,12 +162,11 @@ all user-definable parameters.
 #include <esp_task_wdt.h>
 
 const char * buildTime = __DATE__ " " __TIME__;
-WiFiInterface wifiInterface;
 
 std::vector<uint8_t> restrictedPins;
 
-#if defined(LOCONET_ENABLED) && LOCONET_ENABLED
-LocoNetESP32Uart locoNet(LOCONET_RX_PIN, LOCONET_TX_PIN, LOCONET_UART);
+#if LOCONET_ENABLED
+LocoNetESP32Uart locoNet(LOCONET_RX_PIN, LOCONET_TX_PIN, LOCONET_UART, LOCONET_INVERTED_LOGIC, LOCONET_ENABLE_RX_PIN_PULLUP);
 #endif
 
 bool otaComplete = false;
@@ -184,7 +183,7 @@ void esp32_restart() {
 void setup() {
 	Serial.begin(115200L);
 	Serial.setDebugOutput(true);
-	log_i("DCC++ ESP starting up");
+	LOG(INFO, "DCC++ESP32 v%s starting up", VERSION);
 #ifndef ALLOW_USAGE_OF_RESTRICTED_GPIO_PINS
   restrictedPins.push_back(0);
   restrictedPins.push_back(2);
@@ -375,13 +374,13 @@ void setup() {
     }
   });
   locoNet.onPacket(OPC_INPUT_REP, [](lnMsg *msg) {
-    log_i("LocoNet INPUT_REPORT %02x : %02x", msg->ir.in1, msg->ir.in2);
+    LOG(INFO, "LocoNet INPUT_REPORT %02x : %02x", msg->ir.in1, msg->ir.in2);
   });
   locoNet.onPacket(OPC_SW_REQ, [](lnMsg *msg) {
-    log_i("LocoNet SW_REQ %02x : %02x", msg->srq.sw1, msg->srq.sw2);
+    LOG(INFO, "LocoNet SW_REQ %02x : %02x", msg->srq.sw1, msg->srq.sw2);
   });
   locoNet.onPacket(OPC_SW_REP, [](lnMsg *msg) {
-    log_i("LocoNet SW_REP %02x : %02x", msg->srp.sn1, msg->srp.sn2);
+    LOG(INFO, "LocoNet SW_REP %02x : %02x", msg->srp.sn1, msg->srp.sn2);
   });
 #endif
 
@@ -389,25 +388,24 @@ void setup() {
   MotorBoardManager::powerOnAll();
 #endif
 
-	log_i("DCC++ESP32 READY!");
+	LOG(INFO, "DCC++ESP32 READY!");
   InfoScreen::replaceLine(INFO_SCREEN_ROTATING_STATUS_LINE, F("DCC++ESP READY!"));
 }
 
 void loop() {
   if(otaComplete) {
-    log_i("OTA binary has been received, preparing to reboot!");
+    LOG(INFO, "OTA binary has been received, preparing to reboot!");
     delay(250);
     esp32_restart();
   }
-  wifiInterface.update();
+  MotorBoardManager::check();
   if(!otaInProgress) {
     InfoScreen::update();
-  }
-  MotorBoardManager::check();
 #if LCC_ENABLED
-  lccInterface.update();
+    lccInterface.update();
 #endif
 #if HC12_RADIO_ENABLED
-  HC12Interface::update();
+    HC12Interface::update();
 #endif
+  }
 }

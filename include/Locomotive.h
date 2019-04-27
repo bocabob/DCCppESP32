@@ -69,6 +69,7 @@ public:
   void showStatus();
   void toJson(JsonObject &, bool=true, bool=true);
   void setFunction(uint8_t funcID, bool state=false) {
+    log_v("[Loco %d] Setting function %d to %d", _locoAddress, funcID, state);
     _functionState[funcID] = state;
     _functionsChanged = true;
   }
@@ -175,6 +176,7 @@ public:
   static bool removeLocomotiveConsist(const uint16_t);
   static void processThrottle(const std::vector<String>);
   static void processFunction(const std::vector<String>);
+  static void processFunctionEx(const std::vector<String>);
   static void processConsistThrottle(const std::vector<String>);
   static void showStatus();
   static void showConsistStatus();
@@ -227,6 +229,18 @@ public:
   }
   String getID() {
     return "f";
+  }
+};
+
+// <fex {LOCO} {FUNC} {STATE}]> command handler, this command converts a
+// locomotive function update into a compatible DCC function control packet.
+class FunctionExCommandAdapter : public DCCPPProtocolCommand {
+public:
+  void process(const std::vector<String> arguments) {
+    LocomotiveManager::processFunctionEx(arguments);
+  }
+  String getID() {
+    return "fex";
   }
 };
 

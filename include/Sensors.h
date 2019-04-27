@@ -49,11 +49,11 @@ protected:
   void set(bool state) {
     if(_lastState != state) {
       _lastState = state;
-      log_i("Sensor: %d :: %s", _sensorID, _lastState ? "ACTIVE" : "INACTIVE");
+      LOG(INFO, "Sensor: %d :: %s", _sensorID, _lastState ? "ACTIVE" : "INACTIVE");
       if(state) {
-        wifiInterface.printf(F("<Q %d>"), _sensorID);
+        wifiInterface.print(F("<Q %d>"), _sensorID);
       } else {
-        wifiInterface.printf(F("<q %d>"), _sensorID);
+        wifiInterface.print(F("<q %d>"), _sensorID);
       }
     }
   }

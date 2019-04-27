@@ -43,8 +43,10 @@ enum NEXTION_PAGES {
 enum NEXTION_DEVICE_TYPE {
   BASIC_3_2_DISPLAY,
   BASIC_3_5_DISPLAY,
+  BASIC_5_0_DISPLAY,
   ENHANCED_3_2_DISPLAY,
   ENHANCED_3_5_DISPLAY,
+  ENHANCED_5_0_DISPLAY,
   UNKOWN_DISPLAY
 };
 
@@ -97,15 +99,20 @@ public:
       NextionText(nextion, TITLE_PAGE, 7, "Status4"),
       NextionText(nextion, TITLE_PAGE, 8, "Status5")
      } {}
-  virtual void refreshPage() {}
+  void refreshPage() override {}
   void setStatusText(int line, String text) {
     _statusText[line].setText(text);
   }
+  void clearStatusText() {
+    for(auto line : _statusText) {
+      line.setText("");
+    }
+  }
 protected:
-  virtual void init() {
+  void init() override {
     _versionText.setText(VERSION);
   }
-  virtual void displayPage() {}
+  void displayPage() override {}
 private:
   NextionText _versionText;
   NextionText _statusText[5];
@@ -119,31 +126,31 @@ public:
   }
   void addNumber(const NextionButton *);
   void removeNumber(const NextionButton *);
-  void changeOrientation(const NextionButton *);
+  void changeTurnoutType(const NextionButton *);
   uint32_t getNewAddress() {
     return _newAddressString.toInt();
   }
-  TurnoutOrientation getOrientation() {
-    return (TurnoutOrientation)_orientation;
+  TurnoutType getTurnoutType() {
+    return (TurnoutType)_turnoutType;
   }
-  virtual void refreshPage() {}
+  void refreshPage() override {}
 protected:
-  virtual void init() {}
-  virtual void displayPage();
+  void init() override {}
+  void displayPage() override;
 private:
-  void refreshOrientationButton();
+  void refreshTurnoutTypeButton();
   NextionButton _buttons[10];
   NextionButton _addressPic;
   NextionText _boardAddress;
   NextionText _indexAddress;
-  NextionButton _orientationButton;
+  NextionButton _turnoutTypeButton;
   NextionButton _saveButton;
   NextionButton _quitButton;
   NextionButton _undoButton;
   NextionText _currentAddress;
   NextionText _newAddress;
   uint32_t _address{0};
-  uint8_t _orientation{TurnoutOrientation::LEFT};
+  uint8_t _turnoutType{TurnoutType::LEFT};
   String _newAddressString{""};
 };
 
@@ -159,13 +166,13 @@ public:
   void decreaseLocoSpeed();
   void increaseLocoSpeed();
   void setLocoSpeed(uint8_t speed);
-  virtual void refreshPage() {
+  void refreshPage() override {
     refreshLocomotiveDetails();
   }
   void invalidateLocomotive(uint32_t);
 protected:
-  virtual void init();
-  virtual void displayPage();
+  void init() override;
+  void displayPage() override;
   void previousPageCallback(DCCPPNextionPage *);
 private:
   void refreshLocomotiveDetails();
@@ -185,7 +192,7 @@ private:
   NextionButton _downButton;
   NextionButton _upButton;
   NextionSlider _speedSlider;
-  NextionText _speedNumber;
+  NextionNumber _speedNumber;
 };
 
 class NextionTurnoutPage : public DCCPPNextionPage {
@@ -207,25 +214,26 @@ public:
   }
   void addNewTurnout() {
     _pageMode = PAGE_MODE::ADDITION;
-    NextionAddressPage *addressPage = static_cast<NextionAddressPage *>(nextionPages[ADDRESS_PAGE]);
+    auto addressPage = static_cast<NextionAddressPage *>(nextionPages[ADDRESS_PAGE]);
     addressPage->setCurrentAddress(0);
     addressPage->setPreviousPage(TURNOUT_PAGE);
     addressPage->display();
   }
   void deleteButtonHandler();
 protected:
-  virtual void init() {}
-  virtual void displayPage() {
+  void init() override {}
+  void displayPage() override {
     refreshPage();
   }
   void previousPageCallback(DCCPPNextionPage *);
 private:
   static constexpr int TURNOUTS_PER_PAGE_3_2_DISPLAY = 15;
   static constexpr int TURNOUTS_PER_PAGE_3_5_DISPLAY = 24;
+  static constexpr int TURNOUTS_PER_PAGE_5_0_DISPLAY = 60;
   uint8_t getDefaultTurnoutPictureID(Turnout *);
   uint8_t getTurnoutsPerPageCount();
-  NextionButton _turnoutButtons[TURNOUTS_PER_PAGE_3_5_DISPLAY];
-  NextionButton _toAddress[TURNOUTS_PER_PAGE_3_5_DISPLAY];
+  NextionButton _turnoutButtons[TURNOUTS_PER_PAGE_5_0_DISPLAY];
+  NextionButton _toAddress[TURNOUTS_PER_PAGE_5_0_DISPLAY];
   NextionButton _backButton;
   NextionButton _prevButton;
   NextionButton _nextButton;

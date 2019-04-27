@@ -67,6 +67,7 @@ extern String JSON_DEFAULT_STATE_NODE;
 extern String JSON_SENSORS_NODE;
 extern String JSON_PULLUP_NODE;
 extern String JSON_TURNOUTS_NODE;
+extern String JSON_TURNOUTS_READABLE_STRINGS_NODE;
 extern String JSON_S88_NODE;
 extern String JSON_S88_SENSOR_BASE_NODE;
 extern String JSON_PROG_ON_MAIN;
@@ -80,6 +81,7 @@ extern String JSON_DECODER_VERSION_NODE;
 extern String JSON_DECODER_MANUFACTURER_NODE;
 extern String JSON_CREATE_NODE;
 extern String JSON_OVERALL_STATE_NODE;
+extern String JSON_LAST_UPDATE_NODE;
 
 extern String JSON_VALUE_FORWARD;
 extern String JSON_VALUE_REVERSE;
